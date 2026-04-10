@@ -14,6 +14,5 @@
   "scriptUrl": "https://raw.githubusercontent.com/TheSamurai4861/plugin-1-sora/refs/heads/main/stream-source.js",
   "asyncJS": true,
   "streamAsyncJS": false,
-  "softsub": false,
-  "type": "movies"
+  "softsub": false
 }

@@ -8,7 +8,7 @@ const scriptPath = path.join(projectRoot, 'stream-source.js');
 const manifestPath = path.join(projectRoot, 'venom-stream.json');
 const scriptCode = fs.readFileSync(scriptPath, 'utf8');
 
-function makeSandbox() {
+function makeSandbox(options = {}) {
     const requests = [];
     const sandbox = {
         console,
@@ -81,7 +81,27 @@ function makeSandbox() {
                 };
             }
 
+            if (url.startsWith('https://api.themoviedb.org/3/tv/99999')) {
+                return {
+                    json: async () => ({
+                        id: 99999,
+                        name: 'Fallback Show',
+                        original_name: 'Fallback Show',
+                        first_air_date: '2024-01-01',
+                        seasons: [{ season_number: 1 }],
+                    }),
+                };
+            }
+
             if (url.startsWith('https://api.movix.blog/api/search')) {
+                if (options.omitSeriesSearch && url.includes('Fallback%20Show')) {
+                    return {
+                        json: async () => ({
+                            results: [],
+                        }),
+                    };
+                }
+
                 return {
                     json: async () => ({
                         results: [{ id: 132531, title: 'Titanic', tmdb_id: 597, type: 'movie' }, { id: 51764, name: 'The Boys', tmdb_id: 76479, type: 'series' }],
@@ -119,6 +139,20 @@ function makeSandbox() {
                                 language: 'MULTI',
                                 quality: '1080p',
                                 m3u8: 'https://example.com/boys-s1e1.m3u8',
+                            }
+                        ]
+                    }),
+                };
+            }
+
+            if (url.startsWith('https://api.movix.blog/api/purstream/tv/99999/stream?season=1&episode=1')) {
+                return {
+                    json: async () => ({
+                        sources: [
+                            {
+                                url: 'https://example.com/fallback-show-s1e1.m3u8',
+                                name: 'pulse | 720p | VF',
+                                format: 'm3u8',
                             }
                         ]
                     }),
@@ -187,6 +221,12 @@ async function testExtractStreamUrlTv() {
     assert.strictEqual(streamUrl, 'https://example.com/boys-s1e1.m3u8');
 }
 
+async function testExtractStreamUrlTvPurstreamFallbackWithoutSearchMatch() {
+    const { sandbox } = makeSandbox({ omitSeriesSearch: true });
+    const streamUrl = await sandbox.extractStreamUrl('media://stream/99999?type=shows&season=1&episode=1');
+    assert.strictEqual(streamUrl, 'https://example.com/fallback-show-s1e1.m3u8');
+}
+
 async function testExtractEpisodesTv() {
     const { sandbox } = makeSandbox();
     const episodes = JSON.parse(await sandbox.extractEpisodes('media://stream/76479?mediaType=tv'));
@@ -211,6 +251,7 @@ async function run() {
     await testExtractStreamUrlMovie();
     await testExtractStreamUrlFromHtml();
     await testExtractStreamUrlTv();
+    await testExtractStreamUrlTvPurstreamFallbackWithoutSearchMatch();
     await testExtractEpisodesTv();
     await testSearchResults();
     console.log('All venom-stream tests passed.');

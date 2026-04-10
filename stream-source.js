@@ -20,6 +20,11 @@ function buildQueryString(params) {
         .join('&');
 }
 
+function normalizeMediaType(type) {
+    const normalizedType = String(type || '').trim().toLowerCase();
+    return ['tv', 'show', 'shows', 'series'].includes(normalizedType) ? 'tv' : 'movie';
+}
+
 async function fetchJson(url) {
     try {
         const response = await fetchv2(url, HEADERS);
@@ -187,7 +192,7 @@ function parseMediaUrl(input) {
         const params = new URLSearchParams(queryString);
         const typeParam = params.get('mediaType') || params.get('type');
         if (typeParam) {
-            mediaType = String(typeParam).toLowerCase() === 'tv' ? 'tv' : 'movie';
+            mediaType = normalizeMediaType(typeParam);
         }
 
         season = params.has('season') ? Number(params.get('season')) : undefined;
@@ -347,21 +352,25 @@ async function extractStreamUrl(url) {
             return null;
         }
 
-        const sourceResult = await findSourceResult(mediaDetails, parsed.mediaType);
-        if (!sourceResult) {
-            return null;
-        }
-
         let downloadData = null;
         if (parsed.mediaType === 'tv') {
             if (!parsed.season || !parsed.episode) {
                 return null;
             }
-            downloadData = await getSeriesDownloadLinks(sourceResult.id, parsed.season, parsed.episode);
+
+            const sourceResult = await findSourceResult(mediaDetails, parsed.mediaType);
+            if (sourceResult && sourceResult.id) {
+                downloadData = await getSeriesDownloadLinks(sourceResult.id, parsed.season, parsed.episode);
+            }
+
             if (!downloadData) {
                 downloadData = await getSeriesPurstreamLinks(parsed.tmdbId, parsed.season, parsed.episode);
             }
         } else {
+            const sourceResult = await findSourceResult(mediaDetails, parsed.mediaType);
+            if (!sourceResult || !sourceResult.id) {
+                return null;
+            }
             downloadData = await getDownloadLinks(sourceResult.id);
         }
 

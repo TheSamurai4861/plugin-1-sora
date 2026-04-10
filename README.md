@@ -1,56 +1,60 @@
 # Stream Aggregator Sora Plugin
 
-Ce plugin Sora permet d'accéder aux streams HLS via un backend d'agrégation, en s'appuyant sur TMDB pour la recherche et les métadonnées.
+Ce plugin Sora expose des streams HLS via un backend d'agregation, en s'appuyant sur TMDB pour la recherche et les metadonnees.
 
 ## Installation
 
-1. Copiez le fichier `venom-stream.json` dans le répertoire des modules Sora
-2. Le script `stream_source.js` sera automatiquement chargé depuis l'URL spécifiée
+1. Copiez `venom-stream.json` dans le repertoire des modules Sora.
+2. Le script `stream-source.js` sera charge depuis l'URL definie dans le manifeste.
 
 ## Fonctionnement
 
-Le plugin utilise l'API de TMDB pour la recherche et les métadonnées, puis une API d'agrégation pour obtenir les streams HLS.
+Le plugin utilise TMDB pour la recherche et les details, puis `api.movix.blog` pour resoudre les flux HLS.
 
-### Flux de fonctionnement :
-1. **Recherche** : Recherche sur TMDB, vérifie la disponibilité sur l'agrégateur
-2. **Détails** : Récupère les informations détaillées depuis TMDB
-4. **Épisodes** : Pour les séries, liste les épisodes TMDB et choisit la saison/épisode demandée
-4. **Stream** : Convertit l'ID TMDB en URL HLS via l'API d'agrégation
+### Flux
+
+1. Recherche sur TMDB puis verification de disponibilite cote agregateur.
+2. Recuperation des details depuis TMDB.
+3. Pour les series, enumeration des saisons et episodes via TMDB.
+4. Resolution du stream HLS via l'agregateur, avec fallback `purstream` pour les episodes de series.
 
 ## Configuration
 
-Le plugin est configuré pour :
-- **Qualité** : 1080p (mais retourne la meilleure qualité disponible)
-- **Type** : Films et séries
-- **Langue** : Français
-- **Stream** : HLS
-- **Mode Sora** : `asyncJS` activé, `streamAsyncJS` désactivé
+- Qualite cible : `1080p` avec selection de la meilleure source disponible.
+- Langue : francais.
+- Stream : `HLS`.
+- Mode Sora : `asyncJS` active, `streamAsyncJS` desactive.
 
-Cela garantit que `extractStreamUrl()` reçoit un URL attendu par le script, pas du HTML brut.
+Ce mode garantit que `extractStreamUrl()` recoit une URL et non du HTML brut.
 
-## URLs personnalisées
+## Note Sora
 
-Le plugin utilise un schéma d'URL personnalisé :
-- `media://12345` : Identifie un film par son ID TMDB
-- `media://stream/12345` : Demande le stream HLS pour ce film
-- `media://stream/<tmdbId>?mediaType=tv&season=<saison>&episode=<épisode>` : Demande le stream HLS pour un épisode de série
+La doc `docs/sora.md` n'autorise qu'une seule valeur manifeste pour `type` : `anime`, `movies` ou `shows`.
+
+Comme ce module couvre a la fois les films et les series, le champ `type` a ete retire de `venom-stream.json` pour eviter une categorisation incorrecte.
+
+## URLs personnalisees
+
+- `media://stream/<tmdbId>?mediaType=movie`
+- `media://stream/<tmdbId>?mediaType=tv`
+- `media://stream/<tmdbId>?mediaType=tv&season=<saison>&episode=<episode>`
+
+Le parser accepte aussi les alias `show`, `shows` et `series` pour le type TV.
 
 ## Tests
-
-Vous pouvez exécuter les tests avec Node.js :
 
 ```bash
 cd venom-stream
 node test_stream_source.js
 ```
 
-## Dépendances
+## Dependances
 
-- API TMDB (clé incluse)
-- API d'agrégation (requiert headers spécifiques pour CORS)
+- API TMDB
+- API d'agregation `api.movix.blog`
 
 ## Limitations
 
-- Reçoit les films et les séries via TMDB
-- Nécessite une connexion internet pour les APIs
-- Les URLs HLS sont signées et peuvent expirer
+- Le manifeste Sora ne propose pas de type mixte films+series.
+- Les APIs necessitent une connexion reseau.
+- Les URLs HLS sont signees et peuvent expirer.
