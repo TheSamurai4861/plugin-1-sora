@@ -253,56 +253,56 @@ function testExtractHlsSources() {
 
 async function testExtractStreamUrlMovie() {
     const { sandbox } = makeSandbox();
-    const streamUrl = await sandbox.extractStreamUrl('media://stream/597');
+    const streamUrl = await sandbox.extractStreamUrl('movie/597');
     assert.strictEqual(streamUrl, 'https://example.com/titanic-720p.m3u8');
 }
 
 async function testExtractStreamUrlFromHtml() {
     const { sandbox } = makeSandbox();
-    const htmlInput = '<html><body><a href="media://stream/597">Play</a></body></html>';
+    const htmlInput = '<html><body><a href="movie/597">Play</a></body></html>';
     const streamUrl = await sandbox.extractStreamUrl(htmlInput);
     assert.strictEqual(streamUrl, 'https://example.com/titanic-720p.m3u8');
 }
 
 async function testExtractStreamUrlTv() {
     const { sandbox } = makeSandbox();
-    const streamUrl = await sandbox.extractStreamUrl('media://stream/tv/76479/season/1/episode/1');
+    const streamUrl = await sandbox.extractStreamUrl('tv/76479/1/1');
     assert.strictEqual(streamUrl, 'https://example.com/boys-s1e1.m3u8');
 }
 
 async function testExtractStreamUrlTvPurstreamFallbackWithoutSearchMatch() {
     const { sandbox } = makeSandbox({ omitSeriesSearch: true });
-    const streamUrl = await sandbox.extractStreamUrl('media://stream/99999?type=shows&season=1&episode=1');
+    const streamUrl = await sandbox.extractStreamUrl('tv/99999/1/1');
     assert.strictEqual(streamUrl, 'https://example.com/fallback-show-s1e1.m3u8');
 }
 
 async function testExtractEpisodesTv() {
     const { sandbox } = makeSandbox();
-    const episodes = JSON.parse(await sandbox.extractEpisodes('media://stream/tv/76479'));
+    const episodes = JSON.parse(await sandbox.extractEpisodes('tv/76479/1/1'));
     assert.ok(Array.isArray(episodes), 'extractEpisodes should return an array');
-    assert.strictEqual(episodes[0].href, 'media://stream/tv/76479/season/1/episode/1');
-    assert.strictEqual(episodes[0].number, 'S1E1');
-    assert.strictEqual(episodes[2].number, 'S2E1');
+    assert.strictEqual(episodes[0].href, 'tv/76479/1/1');
+    assert.strictEqual(episodes[0].number, '1');
+    assert.strictEqual(episodes[2].number, '1');
 }
 
 async function testExtractEpisodesTvWithoutTypeHint() {
     const { sandbox } = makeSandbox();
     const episodes = JSON.parse(await sandbox.extractEpisodes('media://stream/76479'));
     assert.ok(Array.isArray(episodes), 'extractEpisodes should return an array without explicit type hint');
-    assert.strictEqual(episodes[0].href, 'media://stream/tv/76479/season/1/episode/1');
+    assert.strictEqual(episodes[0].href, 'tv/76479/1/1');
 }
 
 async function testExtractEpisodesMovieStillReturnsSingleEntry() {
     const { sandbox } = makeSandbox();
-    const episodes = JSON.parse(await sandbox.extractEpisodes('media://stream/movie/597'));
+    const episodes = JSON.parse(await sandbox.extractEpisodes('movie/597'));
     assert.ok(Array.isArray(episodes), 'movie extractEpisodes should return an array');
     assert.strictEqual(episodes.length, 1);
-    assert.strictEqual(episodes[0].href, 'media://stream/movie/597');
+    assert.strictEqual(episodes[0].href, 'movie/597');
 }
 
 async function testExtractStreamUrlTvPurstreamFallbackWhenSeriesDownloadIsEmpty() {
     const { sandbox } = makeSandbox();
-    const streamUrl = await sandbox.extractStreamUrl('media://stream/tv/66732/season/1/episode/1');
+    const streamUrl = await sandbox.extractStreamUrl('tv/66732/1/1');
     assert.strictEqual(streamUrl, 'https://example.com/stranger-things-s1e1.m3u8');
 }
 
@@ -310,7 +310,8 @@ async function testSearchResults() {
     const { sandbox } = makeSandbox();
     const results = JSON.parse(await sandbox.searchResults('Titanic'));
     assert.ok(Array.isArray(results), 'searchResults should return an array');
-    assert.ok(results.some(item => item.href.includes('media://stream/movie/597')), 'search results should include movie href');
+    assert.ok(results.some(item => item.href === 'movie/597'), 'search results should include movie href');
+    assert.ok(results.some(item => item.href === 'tv/76479/1/1'), 'search results should include tv href');
 }
 
 async function run() {

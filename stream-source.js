@@ -203,7 +203,36 @@ function parseMediaUrl(input) {
         return null;
     }
 
-    const typedEpisodeMatch = input.match(/media:\/\/stream\/(movie|tv)\/(\d+)\/season\/(\d+)\/episode\/(\d+)/);
+    let normalizedInput = input.trim();
+
+    const embeddedMatch = normalizedInput.match(/(movie\/\d+|tv\/\d+\/\d+\/\d+|tv\/\d+|media:\/\/stream\/movie\/\d+|media:\/\/stream\/tv\/\d+\/season\/\d+\/episode\/\d+|media:\/\/stream\/tv\/\d+|media:\/\/stream\/\d+\/season\/\d+\/episode\/\d+|media:\/\/stream\/\d+(?:\?[^"'<>\\s]+)?)/);
+    if (embeddedMatch) {
+        normalizedInput = embeddedMatch[1];
+    }
+
+    const relativeEpisodeMatch = normalizedInput.match(/^(movie|tv)\/(\d+)\/(\d+)\/(\d+)$/);
+    if (relativeEpisodeMatch) {
+        return {
+            tmdbId: relativeEpisodeMatch[2],
+            mediaType: relativeEpisodeMatch[1],
+            mediaTypeExplicit: true,
+            season: Number(relativeEpisodeMatch[3]),
+            episode: Number(relativeEpisodeMatch[4])
+        };
+    }
+
+    const relativeMatch = normalizedInput.match(/^(movie|tv)\/(\d+)$/);
+    if (relativeMatch) {
+        return {
+            tmdbId: relativeMatch[2],
+            mediaType: relativeMatch[1],
+            mediaTypeExplicit: true,
+            season: undefined,
+            episode: undefined
+        };
+    }
+
+    const typedEpisodeMatch = normalizedInput.match(/media:\/\/stream\/(movie|tv)\/(\d+)\/season\/(\d+)\/episode\/(\d+)/);
     if (typedEpisodeMatch) {
         return {
             tmdbId: typedEpisodeMatch[2],
@@ -214,7 +243,7 @@ function parseMediaUrl(input) {
         };
     }
 
-    const legacyEpisodeMatch = input.match(/media:\/\/stream\/(\d+)\/season\/(\d+)\/episode\/(\d+)/);
+    const legacyEpisodeMatch = normalizedInput.match(/media:\/\/stream\/(\d+)\/season\/(\d+)\/episode\/(\d+)/);
     if (legacyEpisodeMatch) {
         return {
             tmdbId: legacyEpisodeMatch[1],
@@ -225,8 +254,8 @@ function parseMediaUrl(input) {
         };
     }
 
-    const typedMatch = input.match(/media:\/\/stream\/(movie|tv)\/(\d+)/);
-    const legacyMatch = input.match(/media:\/\/stream\/(\d+)/);
+    const typedMatch = normalizedInput.match(/media:\/\/stream\/(movie|tv)\/(\d+)/);
+    const legacyMatch = normalizedInput.match(/media:\/\/stream\/(\d+)/);
     if (!typedMatch && !legacyMatch) {
         return null;
     }
@@ -236,9 +265,9 @@ function parseMediaUrl(input) {
     let season;
     let episode;
 
-    const queryIndex = input.indexOf('?');
+    const queryIndex = normalizedInput.indexOf('?');
     if (queryIndex !== -1) {
-        const queryString = input.substring(queryIndex + 1);
+        const queryString = normalizedInput.substring(queryIndex + 1);
         const params = new URLSearchParams(queryString);
         const typeParam = params.get('mediaType') || params.get('type');
         if (typeParam) {
@@ -259,11 +288,15 @@ function parseMediaUrl(input) {
 }
 
 function formatMediaHref(tmdbId, mediaType) {
-    return `media://stream/${normalizeMediaType(mediaType)}/${tmdbId}`;
+    return `${normalizeMediaType(mediaType)}/${tmdbId}`;
+}
+
+function formatShowHref(tmdbId) {
+    return `tv/${tmdbId}/1/1`;
 }
 
 function formatEpisodeHref(tmdbId, season, episode) {
-    return `media://stream/tv/${tmdbId}/season/${season}/episode/${episode}`;
+    return `tv/${tmdbId}/${season}/${episode}`;
 }
 
 async function searchResults(keyword) {
@@ -304,7 +337,7 @@ async function searchResults(keyword) {
                 results.push({
                     title: tvShow.name,
                     image: tvShow.poster_path ? `https://image.tmdb.org/t/p/w500${tvShow.poster_path}` : '',
-                    href: formatMediaHref(tvShow.id, 'tv')
+                    href: formatShowHref(tvShow.id)
                 });
             }
         }
@@ -395,7 +428,8 @@ async function extractEpisodes(url) {
 
                 episodes.push({
                     href: formatEpisodeHref(parsed.tmdbId, seasonNumber, episodeNumber),
-                    number: `S${seasonNumber}E${episodeNumber}`
+                    number: String(episodeNumber),
+                    title: episode.name || ''
                 });
             }
         }

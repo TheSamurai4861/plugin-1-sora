@@ -35,11 +35,11 @@ Comme ce module couvre a la fois les films et les series, le champ `type` a ete 
 
 ## URLs personnalisees
 
-- `media://stream/movie/<tmdbId>`
-- `media://stream/tv/<tmdbId>`
-- `media://stream/tv/<tmdbId>/season/<saison>/episode/<episode>`
+- `movie/<tmdbId>`
+- `tv/<tmdbId>/1/1`
+- `tv/<tmdbId>/<saison>/<episode>`
 
-Le parser accepte encore les anciens formats avec querystring et les alias `show`, `shows` et `series` pour le type TV.
+Le parser accepte encore les anciens formats `media://stream/...` et les alias `show`, `shows` et `series` pour le type TV.
 
 ## Tests
 
