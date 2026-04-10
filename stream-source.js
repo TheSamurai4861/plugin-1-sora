@@ -41,6 +41,16 @@ async function fetchJson(url) {
     }
 }
 
+async function fetchText(url) {
+    try {
+        const response = await fetchv2(url, HEADERS);
+        return await response.text();
+    } catch (error) {
+        console.log(`Fetch text error for ${url}:`, error);
+        return null;
+    }
+}
+
 async function getTmdbDetails(tmdbId, mediaType = 'movie') {
     if (!tmdbId) {
         return null;
@@ -197,6 +207,53 @@ function extractHlsSources(downloadData) {
 
 function hasPlayableHlsSource(downloadData) {
     return extractHlsSources(downloadData).some(source => source.url && source.url.trim());
+}
+
+function sortSourcesByPriority(sources) {
+    const qualityOrder = { '1080p': 3, '720p': 2, '480p': 1, '360p': 0 };
+    return [...sources].sort((a, b) => (qualityOrder[b.quality] || 0) - (qualityOrder[a.quality] || 0));
+}
+
+async function isPlayableHlsUrl(url) {
+    if (!url) {
+        return false;
+    }
+
+    const text = await fetchText(url);
+    if (!text || typeof text !== 'string') {
+        return false;
+    }
+
+    return text.includes('#EXTM3U');
+}
+
+async function selectBestSourceUrl(downloadDataList) {
+    const allSources = [];
+    const seenUrls = new Set();
+
+    for (const downloadData of downloadDataList) {
+        const sources = extractHlsSources(downloadData);
+        for (const source of sources) {
+            if (!source.url || seenUrls.has(source.url)) {
+                continue;
+            }
+            seenUrls.add(source.url);
+            allSources.push(source);
+        }
+    }
+
+    if (allSources.length === 0) {
+        return null;
+    }
+
+    const sortedSources = sortSourcesByPriority(allSources);
+    for (const source of sortedSources) {
+        if (await isPlayableHlsUrl(source.url)) {
+            return source.url;
+        }
+    }
+
+    return sortedSources[0].url;
 }
 
 function parseMediaUrl(input) {
@@ -486,6 +543,7 @@ async function extractStreamUrl(url) {
         const mediaType = resolved.mediaType;
 
         let downloadData = null;
+        const downloadCandidates = [];
         if (mediaType === 'tv') {
             if (!parsed.season || !parsed.episode) {
                 return null;
@@ -494,10 +552,16 @@ async function extractStreamUrl(url) {
             const sourceResult = await findSourceResult(mediaDetails, mediaType);
             if (sourceResult && sourceResult.id) {
                 downloadData = await getSeriesDownloadLinks(sourceResult.id, parsed.season, parsed.episode);
+                if (downloadData) {
+                    downloadCandidates.push(downloadData);
+                }
             }
 
             if (!downloadData || !hasPlayableHlsSource(downloadData)) {
                 downloadData = await getSeriesPurstreamLinks(parsed.tmdbId, parsed.season, parsed.episode);
+                if (downloadData) {
+                    downloadCandidates.push(downloadData);
+                }
             }
         } else {
             const sourceResult = await findSourceResult(mediaDetails, mediaType);
@@ -505,22 +569,16 @@ async function extractStreamUrl(url) {
                 return null;
             }
             downloadData = await getDownloadLinks(sourceResult.id);
+            if (downloadData) {
+                downloadCandidates.push(downloadData);
+            }
         }
 
         if (!downloadData) {
             return null;
         }
 
-        const hlsSources = extractHlsSources(downloadData)
-            .filter(source => source.url && source.url.trim().length > 0);
-        if (hlsSources.length === 0) {
-            return null;
-        }
-
-        const qualityOrder = { '1080p': 3, '720p': 2, '480p': 1, '360p': 0 };
-        hlsSources.sort((a, b) => (qualityOrder[b.quality] || 0) - (qualityOrder[a.quality] || 0));
-
-        return hlsSources[0].url;
+        return await selectBestSourceUrl(downloadCandidates);
     } catch (error) {
         console.log('Extract stream URL error:', error);
         return null;

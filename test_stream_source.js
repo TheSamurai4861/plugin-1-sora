@@ -19,6 +19,36 @@ function makeSandbox(options = {}) {
         fetchv2: async (url, headers, method, body) => {
             requests.push({ url, headers, method, body });
 
+            if (url === 'https://example.com/titanic-720p.m3u8') {
+                return {
+                    text: async () => '#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1200000\nvideo.m3u8',
+                };
+            }
+
+            if (url === 'https://example.com/movie-bad-1080p.m3u8') {
+                return {
+                    text: async () => 'Access denied',
+                };
+            }
+
+            if (url === 'https://example.com/boys-s1e1.m3u8') {
+                return {
+                    text: async () => '#EXTM3U\n#EXTINF:10,\nsegment.ts',
+                };
+            }
+
+            if (url === 'https://example.com/stranger-things-s1e1.m3u8') {
+                return {
+                    text: async () => '#EXTM3U\n#EXTINF:10,\nsegment.ts',
+                };
+            }
+
+            if (url === 'https://example.com/fallback-show-s1e1.m3u8') {
+                return {
+                    text: async () => '#EXTM3U\n#EXTINF:10,\nsegment.ts',
+                };
+            }
+
             if (url.startsWith('https://api.themoviedb.org/3/movie/597')) {
                 return {
                     json: async () => ({
@@ -27,6 +57,12 @@ function makeSandbox(options = {}) {
                         original_title: 'Titanic',
                         release_date: '1997-12-19',
                     }),
+                };
+            }
+
+            if (url.startsWith('https://api.themoviedb.org/3/movie/')) {
+                return {
+                    json: async () => null,
                 };
             }
 
@@ -142,7 +178,7 @@ function makeSandbox(options = {}) {
                         sources: [
                             {
                                 type: 'hls',
-                                m3u8: '',
+                                m3u8: 'https://example.com/movie-bad-1080p.m3u8',
                                 quality: '1080p',
                                 language: 'MULTI',
                             },
@@ -257,6 +293,15 @@ async function testExtractStreamUrlMovie() {
     assert.strictEqual(streamUrl, 'https://example.com/titanic-720p.m3u8');
 }
 
+async function testPlayableSourceValidation() {
+    const { sandbox } = makeSandbox();
+    const goodSource = await sandbox.isPlayableHlsUrl('https://example.com/titanic-720p.m3u8');
+    const badSource = await sandbox.isPlayableHlsUrl('https://example.com/movie-bad-1080p.m3u8');
+
+    assert.strictEqual(goodSource, true);
+    assert.strictEqual(badSource, false);
+}
+
 async function testExtractStreamUrlFromHtml() {
     const { sandbox } = makeSandbox();
     const htmlInput = '<html><body><a href="movie/597">Play</a></body></html>';
@@ -320,6 +365,7 @@ async function run() {
     testManifest();
     await testSearchSourceMovie();
     testExtractHlsSources();
+    await testPlayableSourceValidation();
     await testExtractStreamUrlMovie();
     await testExtractStreamUrlFromHtml();
     await testExtractStreamUrlTv();
