@@ -39,11 +39,10 @@ async function getTmdbMovieDetails(tmdbId) {
 }
 
 async function searchSourceMovie(title) {
-    const url = `${SOURCE_API_BASE}/api/search`;
-    const params = { title };
+    const url = `${SOURCE_API_BASE}/api/search?title=${encodeURIComponent(title)}`;
 
     try {
-        const response = await fetchv2(url, HEADERS, "GET", params);
+        const response = await fetchv2(url, HEADERS);
         return await response.json();
     } catch (error) {
         console.log(`Error searching for '${title}':`, error);
