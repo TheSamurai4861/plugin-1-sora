@@ -1,0 +1,19 @@
+{
+  "sourceName": "Venom Stream",
+  "iconUrl": "https://github.com/TheSamurai4861.png",
+  "author": {
+    "name": "Venom",
+    "icon": "https://github.com/TheSamurai4861.png"
+  },
+  "version": "1.0.0",
+  "language": "French",
+  "streamType": "HLS",
+  "quality": "1080p",
+  "baseUrl": "https://api.themoviedb.org/3",
+  "searchBaseUrl": "https://api.themoviedb.org/3/search/movie?api_key=f3d757824f08ea2cff45eb8f47ca3a1e&query=%s&language=fr-FR",
+  "scriptUrl": "https://raw.githubusercontent.com/TheSamurai4861/plugin-1-sora/main/stream_source.js",
+  "asyncJS": true,
+  "streamAsyncJS": true,
+  "softsub": false,
+  "type": "movies"
+}
