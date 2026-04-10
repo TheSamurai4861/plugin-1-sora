@@ -35,9 +35,11 @@ Comme ce module couvre a la fois les films et les series, le champ `type` a ete 
 
 ## URLs personnalisees
 
-- `movie/<tmdbId>`
-- `tv/<tmdbId>`
+- `https://movix.rodeo/player/movie/<tmdbId>`
+- `https://movix.rodeo/player/tv/<tmdbId>/1/1`
 - `tv/<tmdbId>/<saison>/<episode>`
+
+`searchResults()` renvoie des URLs absolues de player. `extractEpisodes()` renvoie ensuite des `href` relatifs au format `tv/<tmdbId>/<saison>/<episode>`.
 
 Le parser accepte encore les anciens formats `media://stream/...` et les alias `show`, `shows` et `series` pour le type TV.
 

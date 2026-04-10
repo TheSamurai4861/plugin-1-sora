@@ -4,6 +4,7 @@
 const TMDB_API_KEY = "f3d757824f08ea2cff45eb8f47ca3a1e";
 const TMDB_BASE = "https://api.themoviedb.org/3";
 const SOURCE_API_BASE = "https://api.movix.blog";
+const PLAYER_BASE = "https://movix.rodeo/player";
 
 const HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:149.0) Gecko/20100101 Firefox/149.0",
@@ -205,9 +206,31 @@ function parseMediaUrl(input) {
 
     let normalizedInput = input.trim();
 
-    const embeddedMatch = normalizedInput.match(/(movie\/\d+|tv\/\d+\/\d+\/\d+|tv\/\d+|media:\/\/stream\/movie\/\d+|media:\/\/stream\/tv\/\d+\/season\/\d+\/episode\/\d+|media:\/\/stream\/tv\/\d+|media:\/\/stream\/\d+\/season\/\d+\/episode\/\d+|media:\/\/stream\/\d+(?:\?[^"'<>\\s]+)?)/);
+    const embeddedMatch = normalizedInput.match(/(https:\/\/movix\.rodeo\/player\/movie\/\d+|https:\/\/movix\.rodeo\/player\/tv\/\d+\/\d+\/\d+|https:\/\/movix\.rodeo\/player\/tv\/\d+|movie\/\d+|tv\/\d+\/\d+\/\d+|tv\/\d+|media:\/\/stream\/movie\/\d+|media:\/\/stream\/tv\/\d+\/season\/\d+\/episode\/\d+|media:\/\/stream\/tv\/\d+|media:\/\/stream\/\d+\/season\/\d+\/episode\/\d+|media:\/\/stream\/\d+(?:\?[^"'<>\\s]+)?)/);
     if (embeddedMatch) {
         normalizedInput = embeddedMatch[1];
+    }
+
+    const absoluteEpisodeMatch = normalizedInput.match(/^https:\/\/movix\.rodeo\/player\/(movie|tv)\/(\d+)\/(\d+)\/(\d+)$/);
+    if (absoluteEpisodeMatch) {
+        return {
+            tmdbId: absoluteEpisodeMatch[2],
+            mediaType: absoluteEpisodeMatch[1],
+            mediaTypeExplicit: true,
+            season: Number(absoluteEpisodeMatch[3]),
+            episode: Number(absoluteEpisodeMatch[4])
+        };
+    }
+
+    const absoluteMatch = normalizedInput.match(/^https:\/\/movix\.rodeo\/player\/(movie|tv)\/(\d+)$/);
+    if (absoluteMatch) {
+        return {
+            tmdbId: absoluteMatch[2],
+            mediaType: absoluteMatch[1],
+            mediaTypeExplicit: true,
+            season: undefined,
+            episode: undefined
+        };
     }
 
     const relativeEpisodeMatch = normalizedInput.match(/^(movie|tv)\/(\d+)\/(\d+)\/(\d+)$/);
@@ -291,6 +314,14 @@ function formatMediaHref(tmdbId, mediaType) {
     return `${normalizeMediaType(mediaType)}/${tmdbId}`;
 }
 
+function formatSearchHref(tmdbId, mediaType) {
+    return `${PLAYER_BASE}/${normalizeMediaType(mediaType)}/${tmdbId}`;
+}
+
+function formatShowHref(tmdbId) {
+    return `${PLAYER_BASE}/tv/${tmdbId}/1/1`;
+}
+
 function formatEpisodeHref(tmdbId, season, episode) {
     return `tv/${tmdbId}/${season}/${episode}`;
 }
@@ -318,7 +349,7 @@ async function searchResults(keyword) {
                 results.push({
                     title: movie.title,
                     image: movie.poster_path ? `https://image.tmdb.org/t/p/w500${movie.poster_path}` : '',
-                    href: formatMediaHref(movie.id, 'movie')
+                    href: formatSearchHref(movie.id, 'movie')
                 });
             }
         }
@@ -333,7 +364,7 @@ async function searchResults(keyword) {
                 results.push({
                     title: tvShow.name,
                     image: tvShow.poster_path ? `https://image.tmdb.org/t/p/w500${tvShow.poster_path}` : '',
-                    href: formatMediaHref(tvShow.id, 'tv')
+                    href: formatShowHref(tvShow.id)
                 });
             }
         }
@@ -383,7 +414,8 @@ async function extractEpisodes(url) {
         if (parsed.mediaTypeExplicit && parsed.mediaType === 'movie') {
             return JSON.stringify([{
                 href: formatMediaHref(parsed.tmdbId, 'movie'),
-                number: '1'
+                number: 1,
+                title: 'Full Movie'
             }]);
         }
 
@@ -395,7 +427,8 @@ async function extractEpisodes(url) {
         if (resolved.mediaType !== 'tv') {
             return JSON.stringify([{
                 href: formatMediaHref(parsed.tmdbId, 'movie'),
-                number: '1'
+                number: 1,
+                title: 'Full Movie'
             }]);
         }
 
@@ -424,7 +457,7 @@ async function extractEpisodes(url) {
 
                 episodes.push({
                     href: formatEpisodeHref(parsed.tmdbId, seasonNumber, episodeNumber),
-                    number: String(episodeNumber),
+                    number: episodeNumber,
                     title: episode.name || ''
                 });
             }

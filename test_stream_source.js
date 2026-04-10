@@ -281,8 +281,8 @@ async function testExtractEpisodesTv() {
     const episodes = JSON.parse(await sandbox.extractEpisodes('tv/76479/1/1'));
     assert.ok(Array.isArray(episodes), 'extractEpisodes should return an array');
     assert.strictEqual(episodes[0].href, 'tv/76479/1/1');
-    assert.strictEqual(episodes[0].number, '1');
-    assert.strictEqual(episodes[2].number, '1');
+    assert.strictEqual(episodes[0].number, 1);
+    assert.strictEqual(episodes[2].number, 1);
 }
 
 async function testExtractEpisodesTvWithoutTypeHint() {
@@ -298,6 +298,7 @@ async function testExtractEpisodesMovieStillReturnsSingleEntry() {
     assert.ok(Array.isArray(episodes), 'movie extractEpisodes should return an array');
     assert.strictEqual(episodes.length, 1);
     assert.strictEqual(episodes[0].href, 'movie/597');
+    assert.strictEqual(episodes[0].number, 1);
 }
 
 async function testExtractStreamUrlTvPurstreamFallbackWhenSeriesDownloadIsEmpty() {
@@ -310,8 +311,8 @@ async function testSearchResults() {
     const { sandbox } = makeSandbox();
     const results = JSON.parse(await sandbox.searchResults('Titanic'));
     assert.ok(Array.isArray(results), 'searchResults should return an array');
-    assert.ok(results.some(item => item.href === 'movie/597'), 'search results should include movie href');
-    assert.ok(results.some(item => item.href === 'tv/76479'), 'search results should include tv href');
+    assert.ok(results.some(item => item.href === 'https://movix.rodeo/player/movie/597'), 'search results should include movie href');
+    assert.ok(results.some(item => item.href === 'https://movix.rodeo/player/tv/76479/1/1'), 'search results should include tv href');
 }
 
 async function run() {
