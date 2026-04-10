@@ -182,7 +182,8 @@ async function extractStreamUrl(url) {
             return null;
         }
 
-        const hlsSources = extractHlsSources(downloadData);
+        const hlsSources = extractHlsSources(downloadData)
+            .filter(source => source.url && source.url.trim().length > 0);
         if (hlsSources.length === 0) {
             return null;
         }
