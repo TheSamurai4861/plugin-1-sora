@@ -4,7 +4,7 @@ Ce plugin Sora permet d'accéder aux streams HLS via un backend d'agrégation, e
 
 ## Installation
 
-1. Copiez le fichier `movix.json` dans le répertoire des modules Sora
+1. Copiez le fichier `venom-stream.json` dans le répertoire des modules Sora
 2. Le script `stream_source.js` sera automatiquement chargé depuis l'URL spécifiée
 
 ## Fonctionnement
