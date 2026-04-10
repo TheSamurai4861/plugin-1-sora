@@ -208,6 +208,7 @@ function parseMediaUrl(input) {
         return {
             tmdbId: typedEpisodeMatch[2],
             mediaType: typedEpisodeMatch[1],
+            mediaTypeExplicit: true,
             season: Number(typedEpisodeMatch[3]),
             episode: Number(typedEpisodeMatch[4])
         };
@@ -218,6 +219,7 @@ function parseMediaUrl(input) {
         return {
             tmdbId: legacyEpisodeMatch[1],
             mediaType: 'tv',
+            mediaTypeExplicit: true,
             season: Number(legacyEpisodeMatch[2]),
             episode: Number(legacyEpisodeMatch[3])
         };
@@ -250,6 +252,7 @@ function parseMediaUrl(input) {
     return {
         tmdbId,
         mediaType,
+        mediaTypeExplicit: Boolean(typedMatch),
         season: Number.isFinite(season) ? season : undefined,
         episode: Number.isFinite(episode) ? episode : undefined
     };
@@ -346,6 +349,13 @@ async function extractEpisodes(url) {
         const parsed = parseMediaUrl(url);
         if (!parsed) {
             return JSON.stringify([]);
+        }
+
+        if (parsed.mediaTypeExplicit && parsed.mediaType === 'movie') {
+            return JSON.stringify([{
+                href: formatMediaHref(parsed.tmdbId, 'movie'),
+                number: '1'
+            }]);
         }
 
         const resolved = await resolveTmdbDetails(parsed.tmdbId, parsed.mediaType);
