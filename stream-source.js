@@ -50,6 +50,29 @@ async function getTmdbDetails(tmdbId, mediaType = 'movie') {
     return await fetchJson(`${url}?${queryString}`);
 }
 
+async function resolveTmdbDetails(tmdbId, preferredMediaType) {
+    const primaryType = normalizeMediaType(preferredMediaType);
+    const fallbackType = primaryType === 'tv' ? 'movie' : 'tv';
+
+    const primaryDetails = await getTmdbDetails(tmdbId, primaryType);
+    if (primaryDetails) {
+        return {
+            mediaType: primaryType,
+            details: primaryDetails
+        };
+    }
+
+    const fallbackDetails = await getTmdbDetails(tmdbId, fallbackType);
+    if (fallbackDetails) {
+        return {
+            mediaType: fallbackType,
+            details: fallbackDetails
+        };
+    }
+
+    return null;
+}
+
 async function getTmdbSeasonDetails(tmdbId, seasonNumber) {
     if (!tmdbId || !seasonNumber) {
         return null;
@@ -176,13 +199,34 @@ function parseMediaUrl(input) {
         return null;
     }
 
-    const tmdbMatch = input.match(/media:\/\/stream\/(\d+)/);
-    if (!tmdbMatch) {
+    const typedEpisodeMatch = input.match(/media:\/\/stream\/(movie|tv)\/(\d+)\/season\/(\d+)\/episode\/(\d+)/);
+    if (typedEpisodeMatch) {
+        return {
+            tmdbId: typedEpisodeMatch[2],
+            mediaType: typedEpisodeMatch[1],
+            season: Number(typedEpisodeMatch[3]),
+            episode: Number(typedEpisodeMatch[4])
+        };
+    }
+
+    const legacyEpisodeMatch = input.match(/media:\/\/stream\/(\d+)\/season\/(\d+)\/episode\/(\d+)/);
+    if (legacyEpisodeMatch) {
+        return {
+            tmdbId: legacyEpisodeMatch[1],
+            mediaType: 'tv',
+            season: Number(legacyEpisodeMatch[2]),
+            episode: Number(legacyEpisodeMatch[3])
+        };
+    }
+
+    const typedMatch = input.match(/media:\/\/stream\/(movie|tv)\/(\d+)/);
+    const legacyMatch = input.match(/media:\/\/stream\/(\d+)/);
+    if (!typedMatch && !legacyMatch) {
         return null;
     }
 
-    const tmdbId = tmdbMatch[1];
-    let mediaType = 'movie';
+    const tmdbId = typedMatch ? typedMatch[2] : legacyMatch[1];
+    let mediaType = typedMatch ? typedMatch[1] : 'movie';
     let season;
     let episode;
 
@@ -199,13 +243,6 @@ function parseMediaUrl(input) {
         episode = params.has('episode') ? Number(params.get('episode')) : undefined;
     }
 
-    const slashMatch = input.match(/media:\/\/stream\/(\d+)\/season\/(\d+)\/episode\/(\d+)/);
-    if (slashMatch) {
-        mediaType = 'tv';
-        season = Number(slashMatch[2]);
-        episode = Number(slashMatch[3]);
-    }
-
     return {
         tmdbId,
         mediaType,
@@ -214,8 +251,12 @@ function parseMediaUrl(input) {
     };
 }
 
+function formatMediaHref(tmdbId, mediaType) {
+    return `media://stream/${normalizeMediaType(mediaType)}/${tmdbId}`;
+}
+
 function formatEpisodeHref(tmdbId, season, episode) {
-    return `media://stream/${tmdbId}?mediaType=tv&season=${season}&episode=${episode}`;
+    return `media://stream/tv/${tmdbId}/season/${season}/episode/${episode}`;
 }
 
 async function searchResults(keyword) {
@@ -241,7 +282,7 @@ async function searchResults(keyword) {
                 results.push({
                     title: movie.title,
                     image: movie.poster_path ? `https://image.tmdb.org/t/p/w500${movie.poster_path}` : '',
-                    href: `media://stream/${movie.id}?mediaType=movie`
+                    href: formatMediaHref(movie.id, 'movie')
                 });
             }
         }
@@ -256,7 +297,7 @@ async function searchResults(keyword) {
                 results.push({
                     title: tvShow.name,
                     image: tvShow.poster_path ? `https://image.tmdb.org/t/p/w500${tvShow.poster_path}` : '',
-                    href: `media://stream/${tvShow.id}?mediaType=tv`
+                    href: formatMediaHref(tvShow.id, 'tv')
                 });
             }
         }
@@ -275,15 +316,18 @@ async function extractDetails(url) {
             return JSON.stringify([]);
         }
 
-        const details = await getTmdbDetails(parsed.tmdbId, parsed.mediaType);
-        if (!details) {
+        const resolved = await resolveTmdbDetails(parsed.tmdbId, parsed.mediaType);
+        if (!resolved || !resolved.details) {
             return JSON.stringify([]);
         }
+
+        const details = resolved.details;
+        const mediaType = resolved.mediaType;
 
         return JSON.stringify([{
             description: details.overview || details.description || 'No description available',
             aliases: details.original_title || details.original_name || details.name || details.title || 'Unknown',
-            airdate: parsed.mediaType === 'tv'
+            airdate: mediaType === 'tv'
                 ? (details.first_air_date ? new Date(details.first_air_date).getFullYear().toString() : 'Unknown')
                 : (details.release_date ? new Date(details.release_date).getFullYear().toString() : 'Unknown')
         }]);
@@ -296,7 +340,7 @@ async function extractDetails(url) {
 async function extractEpisodes(url) {
     try {
         const parsed = parseMediaUrl(url);
-        if (!parsed || parsed.mediaType !== 'tv') {
+        if (!parsed) {
             return JSON.stringify([]);
         }
 
@@ -309,12 +353,9 @@ async function extractEpisodes(url) {
             .filter(season => Number.isFinite(season.season_number) && season.season_number > 0)
             .slice(0, 10);
 
-        const seasonDetails = await Promise.all(
-            seasons.map(season => getTmdbSeasonDetails(parsed.tmdbId, season.season_number))
-        );
-
         const episodes = [];
-        for (const seasonDetail of seasonDetails) {
+        for (const season of seasons) {
+            const seasonDetail = await getTmdbSeasonDetails(parsed.tmdbId, season.season_number);
             if (!seasonDetail || !Array.isArray(seasonDetail.episodes)) {
                 continue;
             }
@@ -347,18 +388,21 @@ async function extractStreamUrl(url) {
             return null;
         }
 
-        const mediaDetails = await getTmdbDetails(parsed.tmdbId, parsed.mediaType);
-        if (!mediaDetails) {
+        const resolved = await resolveTmdbDetails(parsed.tmdbId, parsed.mediaType);
+        if (!resolved || !resolved.details) {
             return null;
         }
 
+        const mediaDetails = resolved.details;
+        const mediaType = resolved.mediaType;
+
         let downloadData = null;
-        if (parsed.mediaType === 'tv') {
+        if (mediaType === 'tv') {
             if (!parsed.season || !parsed.episode) {
                 return null;
             }
 
-            const sourceResult = await findSourceResult(mediaDetails, parsed.mediaType);
+            const sourceResult = await findSourceResult(mediaDetails, mediaType);
             if (sourceResult && sourceResult.id) {
                 downloadData = await getSeriesDownloadLinks(sourceResult.id, parsed.season, parsed.episode);
             }
@@ -367,7 +411,7 @@ async function extractStreamUrl(url) {
                 downloadData = await getSeriesPurstreamLinks(parsed.tmdbId, parsed.season, parsed.episode);
             }
         } else {
-            const sourceResult = await findSourceResult(mediaDetails, parsed.mediaType);
+            const sourceResult = await findSourceResult(mediaDetails, mediaType);
             if (!sourceResult || !sourceResult.id) {
                 return null;
             }

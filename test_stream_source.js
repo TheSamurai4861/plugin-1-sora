@@ -217,7 +217,7 @@ async function testExtractStreamUrlFromHtml() {
 
 async function testExtractStreamUrlTv() {
     const { sandbox } = makeSandbox();
-    const streamUrl = await sandbox.extractStreamUrl('media://stream/76479?mediaType=tv&season=1&episode=1');
+    const streamUrl = await sandbox.extractStreamUrl('media://stream/tv/76479/season/1/episode/1');
     assert.strictEqual(streamUrl, 'https://example.com/boys-s1e1.m3u8');
 }
 
@@ -229,18 +229,25 @@ async function testExtractStreamUrlTvPurstreamFallbackWithoutSearchMatch() {
 
 async function testExtractEpisodesTv() {
     const { sandbox } = makeSandbox();
-    const episodes = JSON.parse(await sandbox.extractEpisodes('media://stream/76479?mediaType=tv'));
+    const episodes = JSON.parse(await sandbox.extractEpisodes('media://stream/tv/76479'));
     assert.ok(Array.isArray(episodes), 'extractEpisodes should return an array');
-    assert.strictEqual(episodes[0].href, 'media://stream/76479?mediaType=tv&season=1&episode=1');
+    assert.strictEqual(episodes[0].href, 'media://stream/tv/76479/season/1/episode/1');
     assert.strictEqual(episodes[0].number, 'S1E1');
     assert.strictEqual(episodes[2].number, 'S2E1');
+}
+
+async function testExtractEpisodesTvWithoutTypeHint() {
+    const { sandbox } = makeSandbox();
+    const episodes = JSON.parse(await sandbox.extractEpisodes('media://stream/76479'));
+    assert.ok(Array.isArray(episodes), 'extractEpisodes should return an array without explicit type hint');
+    assert.strictEqual(episodes[0].href, 'media://stream/tv/76479/season/1/episode/1');
 }
 
 async function testSearchResults() {
     const { sandbox } = makeSandbox();
     const results = JSON.parse(await sandbox.searchResults('Titanic'));
     assert.ok(Array.isArray(results), 'searchResults should return an array');
-    assert.ok(results.some(item => item.href.includes('media://stream/597')), 'search results should include movie href');
+    assert.ok(results.some(item => item.href.includes('media://stream/movie/597')), 'search results should include movie href');
 }
 
 async function run() {
@@ -253,6 +260,7 @@ async function run() {
     await testExtractStreamUrlTv();
     await testExtractStreamUrlTvPurstreamFallbackWithoutSearchMatch();
     await testExtractEpisodesTv();
+    await testExtractEpisodesTvWithoutTypeHint();
     await testSearchResults();
     console.log('All venom-stream tests passed.');
 }
