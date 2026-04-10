@@ -311,7 +311,7 @@ async function testSearchResults() {
     const results = JSON.parse(await sandbox.searchResults('Titanic'));
     assert.ok(Array.isArray(results), 'searchResults should return an array');
     assert.ok(results.some(item => item.href === 'movie/597'), 'search results should include movie href');
-    assert.ok(results.some(item => item.href === 'tv/76479/1/1'), 'search results should include tv href');
+    assert.ok(results.some(item => item.href === 'tv/76479'), 'search results should include tv href');
 }
 
 async function run() {

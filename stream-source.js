@@ -291,10 +291,6 @@ function formatMediaHref(tmdbId, mediaType) {
     return `${normalizeMediaType(mediaType)}/${tmdbId}`;
 }
 
-function formatShowHref(tmdbId) {
-    return `tv/${tmdbId}/1/1`;
-}
-
 function formatEpisodeHref(tmdbId, season, episode) {
     return `tv/${tmdbId}/${season}/${episode}`;
 }
@@ -337,7 +333,7 @@ async function searchResults(keyword) {
                 results.push({
                     title: tvShow.name,
                     image: tvShow.poster_path ? `https://image.tmdb.org/t/p/w500${tvShow.poster_path}` : '',
-                    href: formatShowHref(tvShow.id)
+                    href: formatMediaHref(tvShow.id, 'tv')
                 });
             }
         }
