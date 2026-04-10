@@ -24,6 +24,9 @@ Le plugin est configuré pour :
 - **Type** : Films uniquement
 - **Langue** : Français
 - **Stream** : HLS
+- **Mode Sora** : `asyncJS` activé, `streamAsyncJS` désactivé
+
+Cela garantit que `extractStreamUrl()` reçoit un URL attendu par le script, pas du HTML brut.
 
 ## URLs personnalisées
 
