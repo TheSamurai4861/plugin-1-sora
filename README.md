@@ -14,14 +14,14 @@ Le plugin utilise l'API de TMDB pour la recherche et les métadonnées, puis une
 ### Flux de fonctionnement :
 1. **Recherche** : Recherche sur TMDB, vérifie la disponibilité sur l'agrégateur
 2. **Détails** : Récupère les informations détaillées depuis TMDB
-3. **Épisodes** : Pour les films, un seul "épisode" (le film complet)
+4. **Épisodes** : Pour les séries, liste les épisodes TMDB et choisit la saison/épisode demandée
 4. **Stream** : Convertit l'ID TMDB en URL HLS via l'API d'agrégation
 
 ## Configuration
 
 Le plugin est configuré pour :
 - **Qualité** : 1080p (mais retourne la meilleure qualité disponible)
-- **Type** : Films uniquement
+- **Type** : Films et séries
 - **Langue** : Français
 - **Stream** : HLS
 - **Mode Sora** : `asyncJS` activé, `streamAsyncJS` désactivé
@@ -33,6 +33,7 @@ Cela garantit que `extractStreamUrl()` reçoit un URL attendu par le script, pas
 Le plugin utilise un schéma d'URL personnalisé :
 - `media://12345` : Identifie un film par son ID TMDB
 - `media://stream/12345` : Demande le stream HLS pour ce film
+- `media://stream/<tmdbId>?mediaType=tv&season=<saison>&episode=<épisode>` : Demande le stream HLS pour un épisode de série
 
 ## Tests
 
@@ -50,6 +51,6 @@ node test_stream_source.js
 
 ## Limitations
 
-- Fonctionne uniquement avec des films (pas de séries)
+- Reçoit les films et les séries via TMDB
 - Nécessite une connexion internet pour les APIs
 - Les URLs HLS sont signées et peuvent expirer
