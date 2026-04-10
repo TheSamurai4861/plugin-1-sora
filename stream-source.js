@@ -81,6 +81,27 @@ function extractHlsSources(downloadData) {
     return sources;
 }
 
+function parseTmdbId(input) {
+    if (!input || typeof input !== 'string') {
+        return null;
+    }
+
+    const patterns = [
+        /media:\/\/stream\/(\d+)/,
+        /media:\/\/(\d+)/,
+        /tmdbId=(\d+)/
+    ];
+
+    for (const pattern of patterns) {
+        const match = input.match(pattern);
+        if (match && match[1]) {
+            return match[1];
+        }
+    }
+
+    return null;
+}
+
 async function searchResults(keyword) {
     try {
         const searchUrl = `${TMDB_BASE}/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(keyword)}&language=fr-FR&page=1`;
@@ -160,12 +181,11 @@ async function extractEpisodes(url) {
 
 async function extractStreamUrl(url) {
     try {
-        const tmdbIdMatch = url.match(/media:\/\/stream\/(\d+)/);
-        if (!tmdbIdMatch) {
+        const tmdbId = parseTmdbId(url);
+        if (!tmdbId) {
             return null;
         }
 
-        const tmdbId = tmdbIdMatch[1];
         const movieDetails = await getTmdbMovieDetails(tmdbId);
         if (!movieDetails) {
             return null;

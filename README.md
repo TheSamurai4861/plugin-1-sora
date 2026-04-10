@@ -34,6 +34,15 @@ Le plugin utilise un schéma d'URL personnalisé :
 - `media://12345` : Identifie un film par son ID TMDB
 - `media://stream/12345` : Demande le stream HLS pour ce film
 
+## Tests
+
+Vous pouvez exécuter les tests avec Node.js :
+
+```bash
+cd venom-stream
+node test_stream_source.js
+```
+
 ## Dépendances
 
 - API TMDB (clé incluse)
