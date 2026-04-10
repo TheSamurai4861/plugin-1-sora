@@ -9,14 +9,9 @@ const HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:149.0) Gecko/20100101 Firefox/149.0",
     "Accept": "application/json, text/plain, */*",
     "Accept-Language": "fr,fr-FR;q=0.9,en-US;q=0.8,en;q=0.7",
-    "Accept-Encoding": "gzip, deflate, br, zstd",
+    "Accept-Encoding": "identity",
     "Referer": "https://movix.rodeo/",
-    "Origin": "https://movix.rodeo",
-    "Sec-Fetch-Dest": "empty",
-    "Sec-Fetch-Mode": "cors",
-    "Sec-Fetch-Site": "cross-site",
-    "Connection": "keep-alive",
-    "TE": "trailers"
+    "Origin": "https://movix.rodeo"
 };
 
 async function getTmdbMovieDetails(tmdbId) {
@@ -31,7 +26,12 @@ async function getTmdbMovieDetails(tmdbId) {
 
     try {
         const response = await fetchv2(fullUrl, HEADERS);
-        return await response.json();
+        try {
+            return await response.json();
+        } catch (jsonError) {
+            const rawText = await response.text();
+            return JSON.parse(rawText);
+        }
     } catch (error) {
         console.log(`Error fetching TMDB details for ${tmdbId}:`, error);
         return null;
@@ -43,11 +43,37 @@ async function searchSourceMovie(title) {
 
     try {
         const response = await fetchv2(url, HEADERS);
-        return await response.json();
+        try {
+            return await response.json();
+        } catch (jsonError) {
+            const rawText = await response.text();
+            return JSON.parse(rawText);
+        }
     } catch (error) {
         console.log(`Error searching for '${title}':`, error);
         return null;
     }
+}
+
+async function searchSourceMovieFallback(movieDetails) {
+    const titles = [
+        movieDetails.title,
+        movieDetails.original_title,
+        movieDetails.name,
+        movieDetails.original_name
+    ].filter(Boolean);
+
+    for (const title of titles) {
+        const normalized = title.trim();
+        if (!normalized) continue;
+
+        const result = await searchSourceMovie(normalized);
+        if (result && result.results && result.results.length > 0) {
+            return result;
+        }
+    }
+
+    return null;
 }
 
 async function getDownloadLinks(internalId) {
@@ -55,7 +81,12 @@ async function getDownloadLinks(internalId) {
 
     try {
         const response = await fetchv2(url, HEADERS);
-        return await response.json();
+        try {
+            return await response.json();
+        } catch (jsonError) {
+            const rawText = await response.text();
+            return JSON.parse(rawText);
+        }
     } catch (error) {
         console.log(`Error fetching download links for ID ${internalId}:`, error);
         return null;
@@ -191,7 +222,7 @@ async function extractStreamUrl(url) {
             return null;
         }
 
-        const sourceSearch = await searchSourceMovie(movieDetails.title);
+        const sourceSearch = await searchSourceMovieFallback(movieDetails);
         if (!sourceSearch || !sourceSearch.results || sourceSearch.results.length === 0) {
             return null;
         }

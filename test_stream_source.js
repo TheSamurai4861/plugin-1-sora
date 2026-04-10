@@ -116,6 +116,24 @@ async function testExtractStreamUrlFromHtml() {
     assert.strictEqual(streamUrl, 'https://example.com/titanic-720p.m3u8');
 }
 
+async function testSearchSourceMovieFallback() {
+    const { sandbox, requests } = makeSandbox();
+    const details = { title: 'Titanic', original_title: 'Titanic' };
+    const result = await sandbox.searchSourceMovieFallback(details);
+
+    assert.ok(result, 'searchSourceMovieFallback must return a result object');
+    assert.ok(Array.isArray(result.results), 'searchSourceMovieFallback results should be an array');
+    assert.strictEqual(result.results[0].id, 132531);
+    assert.strictEqual(requests.length, 1, 'One fetchv2 request should be made for fallback');
+}
+
+async function run() {
+    const { sandbox } = makeSandbox();
+    const htmlInput = '<html><body><a href="media://stream/597">Play</a></body></html>';
+    const streamUrl = await sandbox.extractStreamUrl(htmlInput);
+    assert.strictEqual(streamUrl, 'https://example.com/titanic-720p.m3u8');
+}
+
 async function run() {
     console.log('Running venom-stream tests...');
     testManifest();
@@ -123,6 +141,7 @@ async function run() {
     testExtractHlsSources();
     await testExtractStreamUrl();
     await testExtractStreamUrlFromHtml();
+    await testSearchSourceMovieFallback();
     console.log('All venom-stream tests passed.');
 }
 
