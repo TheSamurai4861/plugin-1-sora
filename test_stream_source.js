@@ -8,10 +8,25 @@ const scriptPath = path.join(projectRoot, 'stream-source.js');
 const manifestPath = path.join(projectRoot, 'venom-stream.json');
 const scriptCode = fs.readFileSync(scriptPath, 'utf8');
 
+function createNumberedEpisodes(start, count, prefix) {
+    return Array.from({ length: count }, (_, index) => ({
+        episode_number: start + index,
+        name: `${prefix} ${start + index}`,
+        air_date: '2000-01-01',
+    }));
+}
+
 function makeSandbox(options = {}) {
     const requests = [];
+    const logs = [];
+    const sandboxConsole = {
+        log: (...args) => logs.push({ level: 'log', args }),
+        error: (...args) => logs.push({ level: 'error', args }),
+        warn: (...args) => logs.push({ level: 'warn', args }),
+    };
+
     const sandbox = {
-        console,
+        console: sandboxConsole,
         assert,
         Buffer,
         process,
@@ -44,6 +59,30 @@ function makeSandbox(options = {}) {
             }
 
             if (url === 'https://example.com/fallback-show-s1e1.m3u8') {
+                return {
+                    text: async () => '#EXTM3U\n#EXTINF:10,\nsegment.ts',
+                };
+            }
+
+            if (url === 'https://example.com/one-piece-s20e1-local.m3u8') {
+                return {
+                    text: async () => '#EXTM3U\n#EXTINF:10,\nsegment.ts',
+                };
+            }
+
+            if (url === 'https://example.com/flatten-show-s1e3.m3u8') {
+                return {
+                    text: async () => '#EXTM3U\n#EXTINF:10,\nsegment.ts',
+                };
+            }
+
+            if (url === 'https://example.com/ambiguous-show-s2e1.m3u8') {
+                return {
+                    text: async () => '#EXTM3U\n#EXTINF:10,\nsegment.ts',
+                };
+            }
+
+            if (url === 'https://example.com/ambiguous-show-s1e5.m3u8') {
                 return {
                     text: async () => '#EXTM3U\n#EXTINF:10,\nsegment.ts',
                 };
@@ -140,7 +179,7 @@ function makeSandbox(options = {}) {
                 };
             }
 
-            if (url.startsWith('https://api.themoviedb.org/3/tv/99999')) {
+            if (url.startsWith('https://api.themoviedb.org/3/tv/99999') && !url.includes('/season/')) {
                 return {
                     json: async () => ({
                         id: 99999,
@@ -148,6 +187,122 @@ function makeSandbox(options = {}) {
                         original_name: 'Fallback Show',
                         first_air_date: '2024-01-01',
                         seasons: [{ season_number: 1 }],
+                    }),
+                };
+            }
+
+            if (url.startsWith('https://api.themoviedb.org/3/tv/99999/season/1')) {
+                return {
+                    json: async () => ({
+                        season_number: 1,
+                        episodes: [
+                            { episode_number: 1, name: 'Fallback Episode', air_date: '2024-01-01' }
+                        ]
+                    }),
+                };
+            }
+
+            if (url.startsWith('https://api.themoviedb.org/3/tv/37854/season/1')) {
+                return {
+                    json: async () => ({
+                        season_number: 1,
+                        episodes: createNumberedEpisodes(1, 877, 'East Blue')
+                    }),
+                };
+            }
+
+            if (url.startsWith('https://api.themoviedb.org/3/tv/37854/season/20')) {
+                return {
+                    json: async () => ({
+                        season_number: 20,
+                        episodes: [
+                            { episode_number: 878, name: 'Le monde entier abasourdi', air_date: '2019-03-31' },
+                            { episode_number: 879, name: 'Cap sur Reverie', air_date: '2019-04-07' }
+                        ]
+                    }),
+                };
+            }
+
+            if (url.startsWith('https://api.themoviedb.org/3/tv/37854')) {
+                return {
+                    json: async () => ({
+                        id: 37854,
+                        name: 'One Piece',
+                        original_name: 'One Piece',
+                        first_air_date: '1999-10-20',
+                        seasons: [{ season_number: 1 }, { season_number: 20 }],
+                    }),
+                };
+            }
+
+            if (url.startsWith('https://api.themoviedb.org/3/tv/55555/season/1')) {
+                return {
+                    json: async () => ({
+                        season_number: 1,
+                        episodes: [
+                            { episode_number: 1, name: 'Pilot', air_date: '2020-01-01' },
+                            { episode_number: 2, name: 'Second', air_date: '2020-01-08' }
+                        ]
+                    }),
+                };
+            }
+
+            if (url.startsWith('https://api.themoviedb.org/3/tv/55555/season/2')) {
+                return {
+                    json: async () => ({
+                        season_number: 2,
+                        episodes: [
+                            { episode_number: 50, name: 'Season Two Premiere', air_date: '2021-01-01' }
+                        ]
+                    }),
+                };
+            }
+
+            if (url.startsWith('https://api.themoviedb.org/3/tv/55555')) {
+                return {
+                    json: async () => ({
+                        id: 55555,
+                        name: 'Flatten Show',
+                        original_name: 'Flatten Show',
+                        first_air_date: '2020-01-01',
+                        seasons: [{ season_number: 1 }, { season_number: 2 }],
+                    }),
+                };
+            }
+
+            if (url.startsWith('https://api.themoviedb.org/3/tv/66666/season/1')) {
+                return {
+                    json: async () => ({
+                        season_number: 1,
+                        episodes: [
+                            { episode_number: 1, name: 'Start', air_date: '2022-01-01' },
+                            { episode_number: 2, name: 'Middle', air_date: '2022-01-08' },
+                            { episode_number: 3, name: 'More', air_date: '2022-01-15' },
+                            { episode_number: 4, name: 'End', air_date: '2022-01-22' }
+                        ]
+                    }),
+                };
+            }
+
+            if (url.startsWith('https://api.themoviedb.org/3/tv/66666/season/2')) {
+                return {
+                    json: async () => ({
+                        season_number: 2,
+                        episodes: [
+                            { episode_number: 100, name: 'Renumbered Premiere', air_date: '2023-01-01' }
+                        ]
+                    }),
+                };
+            }
+
+            if (url.startsWith('https://api.themoviedb.org/3/tv/66666')) {
+                return {
+                    json: async () => ({
+                        id: 66666,
+                        name: 'Ambiguous Show',
+                        original_name: 'Ambiguous Show',
+                        first_air_date: '2022-01-01',
+                        seasons: [{ season_number: 1 }, { season_number: 2 }],
                     }),
                 };
             }
@@ -166,7 +321,10 @@ function makeSandbox(options = {}) {
                         results: [
                             { id: 132531, title: 'Titanic', tmdb_id: 597, type: 'movie' },
                             { id: 51764, name: 'The Boys', tmdb_id: 76479, type: 'series' },
-                            { id: 124008, name: 'Stranger Things', tmdb_id: 66732, type: 'series' }
+                            { id: 124008, name: 'Stranger Things', tmdb_id: 66732, type: 'series' },
+                            { id: 88888, name: 'One Piece', tmdb_id: 37854, type: 'series' },
+                            { id: 22222, name: 'Flatten Show', tmdb_id: 55555, type: 'series' },
+                            { id: 33333, name: 'Ambiguous Show', tmdb_id: 66666, type: 'series' }
                         ],
                     }),
                 };
@@ -216,6 +374,106 @@ function makeSandbox(options = {}) {
                 };
             }
 
+            if (url.startsWith('https://api.movix.blog/api/series/download/88888/season/20/episode/878')) {
+                return {
+                    json: async () => ({
+                        sources: []
+                    }),
+                };
+            }
+
+            if (url.startsWith('https://api.movix.blog/api/series/download/88888/season/20/episode/1')) {
+                return {
+                    json: async () => ({
+                        sources: [
+                            {
+                                quality: '1080p',
+                                language: 'VOSTFR',
+                                m3u8: 'https://example.com/one-piece-s20e1-local.m3u8',
+                                type: 'hls',
+                            }
+                        ]
+                    }),
+                };
+            }
+
+            if (url.startsWith('https://api.movix.blog/api/series/download/88888/season/1/episode/878')) {
+                return {
+                    json: async () => ({
+                        sources: []
+                    }),
+                };
+            }
+
+            if (url.startsWith('https://api.movix.blog/api/series/download/22222/season/2/episode/50')) {
+                return {
+                    json: async () => ({
+                        sources: []
+                    }),
+                };
+            }
+
+            if (url.startsWith('https://api.movix.blog/api/series/download/22222/season/2/episode/1')) {
+                return {
+                    json: async () => ({
+                        sources: []
+                    }),
+                };
+            }
+
+            if (url.startsWith('https://api.movix.blog/api/series/download/22222/season/1/episode/3')) {
+                return {
+                    json: async () => ({
+                        sources: [
+                            {
+                                quality: '720p',
+                                language: 'VF',
+                                m3u8: 'https://example.com/flatten-show-s1e3.m3u8',
+                                type: 'hls',
+                            }
+                        ]
+                    }),
+                };
+            }
+
+            if (url.startsWith('https://api.movix.blog/api/series/download/33333/season/2/episode/100')) {
+                return {
+                    json: async () => ({
+                        sources: []
+                    }),
+                };
+            }
+
+            if (url.startsWith('https://api.movix.blog/api/series/download/33333/season/2/episode/1')) {
+                return {
+                    json: async () => ({
+                        sources: [
+                            {
+                                quality: '720p',
+                                language: 'VF',
+                                m3u8: 'https://example.com/ambiguous-show-s2e1.m3u8',
+                                type: 'hls',
+                            }
+                        ]
+                    }),
+                };
+            }
+
+            if (url.startsWith('https://api.movix.blog/api/series/download/33333/season/1/episode/5')) {
+                return {
+                    json: async () => ({
+                        sources: [
+                            {
+                                quality: '720p',
+                                language: 'VF',
+                                m3u8: 'https://example.com/ambiguous-show-s1e5.m3u8',
+                                type: 'hls',
+                            }
+                        ]
+                    }),
+                };
+            }
+
             if (url.startsWith('https://api.movix.blog/api/purstream/tv/66732/stream?season=1&episode=1')) {
                 return {
                     json: async () => ({
@@ -244,6 +502,30 @@ function makeSandbox(options = {}) {
                 };
             }
 
+            if (url.startsWith('https://api.movix.blog/api/purstream/tv/37854/stream?season=')) {
+                return {
+                    json: async () => ({
+                        sources: []
+                    }),
+                };
+            }
+
+            if (url.startsWith('https://api.movix.blog/api/purstream/tv/55555/stream?season=')) {
+                return {
+                    json: async () => ({
+                        sources: []
+                    }),
+                };
+            }
+
+            if (url.startsWith('https://api.movix.blog/api/purstream/tv/66666/stream?season=')) {
+                return {
+                    json: async () => ({
+                        sources: []
+                    }),
+                };
+            }
+
             throw new Error(`Unexpected fetchv2 request: ${url}`);
         },
     };
@@ -251,7 +533,7 @@ function makeSandbox(options = {}) {
     sandbox.global = sandbox;
     vm.createContext(sandbox);
     vm.runInContext(scriptCode, sandbox, { filename: scriptPath });
-    return { sandbox, requests };
+    return { sandbox, requests, logs };
 }
 
 function testManifest() {
@@ -261,6 +543,14 @@ function testManifest() {
     assert.ok(typeof manifest.searchBaseUrl === 'string', 'searchBaseUrl must be a string');
     assert.ok(manifest.searchBaseUrl.includes('%s'), 'searchBaseUrl must include %s');
     assert.ok(typeof manifest.scriptUrl === 'string' && manifest.scriptUrl.length > 0, 'scriptUrl must be defined');
+}
+
+function findRequestIndex(requests, fragment) {
+    return requests.findIndex(request => request.url.includes(fragment));
+}
+
+function countRequests(requests, fragment) {
+    return requests.filter(request => request.url.includes(fragment)).length;
 }
 
 async function testSearchSourceMovie() {
@@ -337,6 +627,16 @@ async function testExtractEpisodesTvWithoutTypeHint() {
     assert.strictEqual(episodes[0].href, 'tv/76479/1/1');
 }
 
+async function testExtractEpisodesOnePieceUsesCanonicalTmdbNumbers() {
+    const { sandbox } = makeSandbox();
+    const episodes = JSON.parse(await sandbox.extractEpisodes('tv/37854/20/878'));
+    const targetEpisode = episodes.find(episode => episode.href === 'tv/37854/20/878');
+
+    assert.ok(targetEpisode, 'One Piece canonical episode should be listed with TMDB numbering');
+    assert.strictEqual(targetEpisode.number, 878);
+    assert.strictEqual(targetEpisode.title, 'Le monde entier abasourdi');
+}
+
 async function testExtractEpisodesMovieStillReturnsSingleEntry() {
     const { sandbox } = makeSandbox();
     const episodes = JSON.parse(await sandbox.extractEpisodes('movie/597'));
@@ -350,6 +650,48 @@ async function testExtractStreamUrlTvPurstreamFallbackWhenSeriesDownloadIsEmpty(
     const { sandbox } = makeSandbox();
     const streamUrl = await sandbox.extractStreamUrl('tv/66732/1/1');
     assert.strictEqual(streamUrl, 'https://example.com/stranger-things-s1e1.m3u8');
+}
+
+async function testExtractStreamUrlOnePieceUsesSeasonLocalFallback() {
+    const { sandbox, requests } = makeSandbox();
+    const streamUrl = await sandbox.extractStreamUrl('tv/37854/20/878');
+
+    assert.strictEqual(streamUrl, 'https://example.com/one-piece-s20e1-local.m3u8');
+    assert.ok(findRequestIndex(requests, '/api/series/download/88888/season/20/episode/878') !== -1, 'exact TMDB candidate should be tested');
+    assert.ok(findRequestIndex(requests, '/api/series/download/88888/season/20/episode/1') !== -1, 'season-local fallback should be tested');
+    assert.ok(findRequestIndex(requests, '/api/series/download/88888/season/20/episode/878') < findRequestIndex(requests, '/api/series/download/88888/season/20/episode/1'), 'exact TMDB candidate should be tried before season-local fallback');
+}
+
+async function testExtractStreamUrlUsesFlattenFallback() {
+    const { sandbox, requests } = makeSandbox();
+    const streamUrl = await sandbox.extractStreamUrl('tv/55555/2/50');
+
+    assert.strictEqual(streamUrl, 'https://example.com/flatten-show-s1e3.m3u8');
+    assert.ok(findRequestIndex(requests, '/api/series/download/22222/season/2/episode/50') !== -1, 'exact TMDB candidate should be tested');
+    assert.ok(findRequestIndex(requests, '/api/series/download/22222/season/2/episode/1') !== -1, 'season-local fallback should be tested');
+    assert.ok(findRequestIndex(requests, '/api/series/download/22222/season/1/episode/3') !== -1, 'flatten fallback should be tested');
+    assert.ok(findRequestIndex(requests, '/api/series/download/22222/season/2/episode/1') < findRequestIndex(requests, '/api/series/download/22222/season/1/episode/3'), 'flatten fallback should run after season-local fallback');
+}
+
+async function testExtractStreamUrlReturnsNullWhenFallbacksAreAmbiguous() {
+    const { sandbox, requests, logs } = makeSandbox();
+    const streamUrl = await sandbox.extractStreamUrl('tv/66666/2/100');
+
+    assert.strictEqual(streamUrl, null);
+    assert.ok(findRequestIndex(requests, '/api/series/download/33333/season/2/episode/1') !== -1, 'first fallback should be tested');
+    assert.ok(findRequestIndex(requests, '/api/series/download/33333/season/1/episode/5') !== -1, 'second fallback should be tested');
+    assert.ok(logs.some(entry => entry.args.some(value => String(value).includes('resolution_ambiguous'))), 'ambiguity should be logged');
+}
+
+async function testSeriesResolutionCachesEpisodeIndexAndSourceResult() {
+    const { sandbox, requests } = makeSandbox();
+
+    await sandbox.extractStreamUrl('tv/55555/2/50');
+    await sandbox.extractStreamUrl('tv/55555/2/50');
+
+    assert.strictEqual(countRequests(requests, 'https://api.movix.blog/api/search?title=Flatten%20Show'), 1, 'source search should be cached');
+    assert.strictEqual(countRequests(requests, 'https://api.themoviedb.org/3/tv/55555/season/1'), 1, 'season 1 index should be cached');
+    assert.strictEqual(countRequests(requests, 'https://api.themoviedb.org/3/tv/55555/season/2'), 1, 'season 2 index should be cached');
 }
 
 async function testSearchResults() {
@@ -373,7 +715,12 @@ async function run() {
     await testExtractStreamUrlTvPurstreamFallbackWhenSeriesDownloadIsEmpty();
     await testExtractEpisodesTv();
     await testExtractEpisodesTvWithoutTypeHint();
+    await testExtractEpisodesOnePieceUsesCanonicalTmdbNumbers();
     await testExtractEpisodesMovieStillReturnsSingleEntry();
+    await testExtractStreamUrlOnePieceUsesSeasonLocalFallback();
+    await testExtractStreamUrlUsesFlattenFallback();
+    await testExtractStreamUrlReturnsNullWhenFallbacksAreAmbiguous();
+    await testSeriesResolutionCachesEpisodeIndexAndSourceResult();
     await testSearchResults();
     console.log('All venom-stream tests passed.');
 }

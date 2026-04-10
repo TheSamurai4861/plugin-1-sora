@@ -5,6 +5,10 @@ const TMDB_API_KEY = "f3d757824f08ea2cff45eb8f47ca3a1e";
 const TMDB_BASE = "https://api.themoviedb.org/3";
 const SOURCE_API_BASE = "https://api.movix.blog";
 const PLAYER_BASE = "https://movix.rodeo/player";
+const CACHE_TTL_MS = 15 * 60 * 1000;
+
+const sourceResultCache = new Map();
+const episodeIndexCache = new Map();
 
 const HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:149.0) Gecko/20100101 Firefox/149.0",
@@ -24,6 +28,37 @@ function buildQueryString(params) {
 function normalizeMediaType(type) {
     const normalizedType = String(type || '').trim().toLowerCase();
     return ['tv', 'show', 'shows', 'series'].includes(normalizedType) ? 'tv' : 'movie';
+}
+
+function getCachedValue(cache, key) {
+    const entry = cache.get(key);
+    if (!entry) {
+        return undefined;
+    }
+
+    if (Date.now() > entry.expiresAt) {
+        cache.delete(key);
+        return undefined;
+    }
+
+    return entry.value;
+}
+
+function setCachedValue(cache, key, value) {
+    cache.set(key, {
+        value,
+        expiresAt: Date.now() + CACHE_TTL_MS
+    });
+
+    return value;
+}
+
+function logSeriesResolution(event, payload) {
+    try {
+        console.log(`[series-resolution] ${event} ${JSON.stringify(payload)}`);
+    } catch (error) {
+        console.log(`[series-resolution] ${event}`);
+    }
 }
 
 async function fetchJson(url) {
@@ -108,6 +143,12 @@ async function findSourceResult(mediaDetails, mediaType) {
         return null;
     }
 
+    const cacheKey = `${normalizeMediaType(mediaType)}:${mediaDetails.id}`;
+    const cachedResult = getCachedValue(sourceResultCache, cacheKey);
+    if (cachedResult !== undefined) {
+        return cachedResult;
+    }
+
     const titles = [
         mediaDetails.title,
         mediaDetails.original_title,
@@ -130,7 +171,7 @@ async function findSourceResult(mediaDetails, mediaType) {
         );
 
         if (exactMatch) {
-            return exactMatch;
+            return setCachedValue(sourceResultCache, cacheKey, exactMatch);
         }
 
         const typeMatch = sourceSearch.results.find(result =>
@@ -140,11 +181,11 @@ async function findSourceResult(mediaDetails, mediaType) {
         );
 
         if (typeMatch) {
-            return typeMatch;
+            return setCachedValue(sourceResultCache, cacheKey, typeMatch);
         }
     }
 
-    return null;
+    return setCachedValue(sourceResultCache, cacheKey, null);
 }
 
 async function getDownloadLinks(internalId) {
@@ -254,6 +295,138 @@ async function selectBestSourceUrl(downloadDataList) {
     }
 
     return sortedSources[0].url;
+}
+
+function createEpisodeKey(seasonNumber, episodeNumber) {
+    return `${seasonNumber}:${episodeNumber}`;
+}
+
+async function buildCanonicalEpisodeIndex(tmdbId, tvDetails) {
+    if (!tmdbId || !tvDetails || !Array.isArray(tvDetails.seasons)) {
+        return null;
+    }
+
+    const seasons = tvDetails.seasons
+        .filter(season => Number.isFinite(season.season_number) && season.season_number > 0)
+        .sort((a, b) => a.season_number - b.season_number);
+
+    const episodes = [];
+    const episodeByKey = {};
+    let flattenedEpisodeNumber = 0;
+
+    for (const season of seasons) {
+        const seasonDetail = await getTmdbSeasonDetails(tmdbId, season.season_number);
+        if (!seasonDetail || !Array.isArray(seasonDetail.episodes)) {
+            continue;
+        }
+
+        let seasonLocalEpisodeNumber = 0;
+        for (const episode of seasonDetail.episodes) {
+            const seasonNumber = seasonDetail.season_number || episode.season_number;
+            const tmdbEpisodeNumber = episode.episode_number;
+            if (!Number.isFinite(seasonNumber) || !Number.isFinite(tmdbEpisodeNumber)) {
+                continue;
+            }
+
+            seasonLocalEpisodeNumber += 1;
+            flattenedEpisodeNumber += 1;
+
+            const canonicalEpisode = {
+                seasonNumber,
+                tmdbEpisodeNumber,
+                seasonLocalEpisodeNumber,
+                flattenedEpisodeNumber,
+                title: episode.name || '',
+                airDate: episode.air_date || ''
+            };
+
+            episodes.push(canonicalEpisode);
+            episodeByKey[createEpisodeKey(seasonNumber, tmdbEpisodeNumber)] = canonicalEpisode;
+        }
+    }
+
+    return {
+        episodes,
+        episodeByKey
+    };
+}
+
+async function getCanonicalEpisodeIndex(tmdbId, tvDetails) {
+    const cachedIndex = getCachedValue(episodeIndexCache, String(tmdbId));
+    if (cachedIndex !== undefined) {
+        return cachedIndex;
+    }
+
+    const builtIndex = await buildCanonicalEpisodeIndex(tmdbId, tvDetails);
+    return setCachedValue(episodeIndexCache, String(tmdbId), builtIndex);
+}
+
+function findCanonicalEpisode(index, seasonNumber, tmdbEpisodeNumber) {
+    if (!index || !index.episodeByKey) {
+        return null;
+    }
+
+    return index.episodeByKey[createEpisodeKey(seasonNumber, tmdbEpisodeNumber)] || null;
+}
+
+function buildSeriesResolutionCandidates(canonicalEpisode) {
+    if (!canonicalEpisode) {
+        return [];
+    }
+
+    const candidates = [];
+    const seenKeys = new Set();
+
+    function addCandidate(strategy, seasonNumber, episodeNumber) {
+        if (!Number.isFinite(seasonNumber) || !Number.isFinite(episodeNumber)) {
+            return;
+        }
+
+        const key = createEpisodeKey(seasonNumber, episodeNumber);
+        if (seenKeys.has(key)) {
+            return;
+        }
+
+        seenKeys.add(key);
+        candidates.push({
+            strategy,
+            season: seasonNumber,
+            episode: episodeNumber
+        });
+    }
+
+    addCandidate('exact_tmdb', canonicalEpisode.seasonNumber, canonicalEpisode.tmdbEpisodeNumber);
+    addCandidate('season_local', canonicalEpisode.seasonNumber, canonicalEpisode.seasonLocalEpisodeNumber);
+    addCandidate('flattened_to_season_1', 1, canonicalEpisode.flattenedEpisodeNumber);
+
+    return candidates;
+}
+
+async function resolveSeriesCandidate(sourceResult, tmdbId, candidate) {
+    const downloadCandidates = [];
+    let seriesDownloadData = null;
+    let purstreamData = null;
+
+    if (sourceResult && sourceResult.id) {
+        seriesDownloadData = await getSeriesDownloadLinks(sourceResult.id, candidate.season, candidate.episode);
+        if (seriesDownloadData) {
+            downloadCandidates.push(seriesDownloadData);
+        }
+    }
+
+    if (!seriesDownloadData || !hasPlayableHlsSource(seriesDownloadData)) {
+        purstreamData = await getSeriesPurstreamLinks(tmdbId, candidate.season, candidate.episode);
+        if (purstreamData) {
+            downloadCandidates.push(purstreamData);
+        }
+    }
+
+    return {
+        candidate,
+        url: await selectBestSourceUrl(downloadCandidates),
+        hasSeriesDownload: Boolean(seriesDownloadData),
+        hasPurstream: Boolean(purstreamData)
+    };
 }
 
 function parseMediaUrl(input) {
@@ -494,31 +667,16 @@ async function extractEpisodes(url) {
             return JSON.stringify([]);
         }
 
-        const seasons = tvDetails.seasons
-            .filter(season => Number.isFinite(season.season_number) && season.season_number > 0)
-            .slice(0, 10);
-
-        const episodes = [];
-        for (const season of seasons) {
-            const seasonDetail = await getTmdbSeasonDetails(parsed.tmdbId, season.season_number);
-            if (!seasonDetail || !Array.isArray(seasonDetail.episodes)) {
-                continue;
-            }
-
-            for (const episode of seasonDetail.episodes) {
-                const seasonNumber = seasonDetail.season_number || episode.season_number;
-                const episodeNumber = episode.episode_number;
-                if (!Number.isFinite(seasonNumber) || !Number.isFinite(episodeNumber)) {
-                    continue;
-                }
-
-                episodes.push({
-                    href: formatEpisodeHref(parsed.tmdbId, seasonNumber, episodeNumber),
-                    number: episodeNumber,
-                    title: episode.name || ''
-                });
-            }
+        const episodeIndex = await getCanonicalEpisodeIndex(parsed.tmdbId, tvDetails);
+        if (!episodeIndex || !Array.isArray(episodeIndex.episodes)) {
+            return JSON.stringify([]);
         }
+
+        const episodes = episodeIndex.episodes.map(episode => ({
+            href: formatEpisodeHref(parsed.tmdbId, episode.seasonNumber, episode.tmdbEpisodeNumber),
+            number: episode.tmdbEpisodeNumber,
+            title: episode.title || ''
+        }));
 
         return JSON.stringify(episodes);
     } catch (error) {
@@ -542,43 +700,106 @@ async function extractStreamUrl(url) {
         const mediaDetails = resolved.details;
         const mediaType = resolved.mediaType;
 
-        let downloadData = null;
-        const downloadCandidates = [];
         if (mediaType === 'tv') {
             if (!parsed.season || !parsed.episode) {
                 return null;
             }
 
+            const episodeIndex = await getCanonicalEpisodeIndex(parsed.tmdbId, mediaDetails);
+            const canonicalEpisode = findCanonicalEpisode(episodeIndex, parsed.season, parsed.episode);
+            if (!canonicalEpisode) {
+                logSeriesResolution('canonical_episode_not_found', {
+                    tmdbId: parsed.tmdbId,
+                    requestedSeason: parsed.season,
+                    requestedEpisode: parsed.episode
+                });
+                return null;
+            }
+
+            const candidates = buildSeriesResolutionCandidates(canonicalEpisode);
             const sourceResult = await findSourceResult(mediaDetails, mediaType);
-            if (sourceResult && sourceResult.id) {
-                downloadData = await getSeriesDownloadLinks(sourceResult.id, parsed.season, parsed.episode);
-                if (downloadData) {
-                    downloadCandidates.push(downloadData);
+
+            logSeriesResolution('canonical_episode_resolved', {
+                tmdbId: parsed.tmdbId,
+                canonicalEpisode,
+                candidates
+            });
+
+            const [exactCandidate, ...alternativeCandidates] = candidates;
+            if (!exactCandidate) {
+                return null;
+            }
+
+            const exactResolution = await resolveSeriesCandidate(sourceResult, parsed.tmdbId, exactCandidate);
+            logSeriesResolution('candidate_tested', {
+                tmdbId: parsed.tmdbId,
+                candidate: exactResolution.candidate,
+                resolved: Boolean(exactResolution.url),
+                hasSeriesDownload: exactResolution.hasSeriesDownload,
+                hasPurstream: exactResolution.hasPurstream
+            });
+
+            if (exactResolution.url) {
+                logSeriesResolution('candidate_selected', {
+                    tmdbId: parsed.tmdbId,
+                    candidate: exactResolution.candidate,
+                    reason: 'exact_tmdb_match'
+                });
+                return exactResolution.url;
+            }
+
+            const alternativeResolutions = [];
+            for (const candidate of alternativeCandidates) {
+                const candidateResolution = await resolveSeriesCandidate(sourceResult, parsed.tmdbId, candidate);
+                logSeriesResolution('candidate_tested', {
+                    tmdbId: parsed.tmdbId,
+                    candidate: candidateResolution.candidate,
+                    resolved: Boolean(candidateResolution.url),
+                    hasSeriesDownload: candidateResolution.hasSeriesDownload,
+                    hasPurstream: candidateResolution.hasPurstream
+                });
+
+                if (candidateResolution.url) {
+                    alternativeResolutions.push(candidateResolution);
                 }
             }
 
-            if (!downloadData || !hasPlayableHlsSource(downloadData)) {
-                downloadData = await getSeriesPurstreamLinks(parsed.tmdbId, parsed.season, parsed.episode);
-                if (downloadData) {
-                    downloadCandidates.push(downloadData);
-                }
+            if (alternativeResolutions.length === 1) {
+                logSeriesResolution('candidate_selected', {
+                    tmdbId: parsed.tmdbId,
+                    candidate: alternativeResolutions[0].candidate,
+                    reason: 'single_fallback_match'
+                });
+                return alternativeResolutions[0].url;
             }
+
+            if (alternativeResolutions.length > 1) {
+                logSeriesResolution('resolution_ambiguous', {
+                    tmdbId: parsed.tmdbId,
+                    canonicalEpisode,
+                    matches: alternativeResolutions.map(resolution => resolution.candidate)
+                });
+                return null;
+            }
+
+            logSeriesResolution('no_candidate_resolved', {
+                tmdbId: parsed.tmdbId,
+                canonicalEpisode,
+                candidates
+            });
+            return null;
         } else {
             const sourceResult = await findSourceResult(mediaDetails, mediaType);
             if (!sourceResult || !sourceResult.id) {
                 return null;
             }
-            downloadData = await getDownloadLinks(sourceResult.id);
-            if (downloadData) {
-                downloadCandidates.push(downloadData);
+            const downloadData = await getDownloadLinks(sourceResult.id);
+            if (!downloadData) {
+                return null;
             }
-        }
 
-        if (!downloadData) {
-            return null;
+            return await selectBestSourceUrl([downloadData]);
         }
-
-        return await selectBestSourceUrl(downloadCandidates);
     } catch (error) {
         console.log('Extract stream URL error:', error);
         return null;
