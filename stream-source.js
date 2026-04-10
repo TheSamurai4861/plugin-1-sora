@@ -194,6 +194,10 @@ function extractHlsSources(downloadData) {
     return sources;
 }
 
+function hasPlayableHlsSource(downloadData) {
+    return extractHlsSources(downloadData).some(source => source.url && source.url.trim());
+}
+
 function parseMediaUrl(input) {
     if (!input || typeof input !== 'string') {
         return null;
@@ -344,7 +348,19 @@ async function extractEpisodes(url) {
             return JSON.stringify([]);
         }
 
-        const tvDetails = await getTmdbDetails(parsed.tmdbId, 'tv');
+        const resolved = await resolveTmdbDetails(parsed.tmdbId, parsed.mediaType);
+        if (!resolved) {
+            return JSON.stringify([]);
+        }
+
+        if (resolved.mediaType !== 'tv') {
+            return JSON.stringify([{
+                href: formatMediaHref(parsed.tmdbId, 'movie'),
+                number: '1'
+            }]);
+        }
+
+        const tvDetails = resolved.details;
         if (!tvDetails || !Array.isArray(tvDetails.seasons)) {
             return JSON.stringify([]);
         }
@@ -407,7 +423,7 @@ async function extractStreamUrl(url) {
                 downloadData = await getSeriesDownloadLinks(sourceResult.id, parsed.season, parsed.episode);
             }
 
-            if (!downloadData) {
+            if (!downloadData || !hasPlayableHlsSource(downloadData)) {
                 downloadData = await getSeriesPurstreamLinks(parsed.tmdbId, parsed.season, parsed.episode);
             }
         } else {

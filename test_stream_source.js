@@ -81,6 +81,29 @@ function makeSandbox(options = {}) {
                 };
             }
 
+            if (url.startsWith('https://api.themoviedb.org/3/tv/66732/season/1')) {
+                return {
+                    json: async () => ({
+                        season_number: 1,
+                        episodes: [
+                            { episode_number: 1, name: 'Chapter One' }
+                        ]
+                    }),
+                };
+            }
+
+            if (url.startsWith('https://api.themoviedb.org/3/tv/66732')) {
+                return {
+                    json: async () => ({
+                        id: 66732,
+                        name: 'Stranger Things',
+                        original_name: 'Stranger Things',
+                        first_air_date: '2016-07-15',
+                        seasons: [{ season_number: 1 }],
+                    }),
+                };
+            }
+
             if (url.startsWith('https://api.themoviedb.org/3/tv/99999')) {
                 return {
                     json: async () => ({
@@ -104,7 +127,11 @@ function makeSandbox(options = {}) {
 
                 return {
                     json: async () => ({
-                        results: [{ id: 132531, title: 'Titanic', tmdb_id: 597, type: 'movie' }, { id: 51764, name: 'The Boys', tmdb_id: 76479, type: 'series' }],
+                        results: [
+                            { id: 132531, title: 'Titanic', tmdb_id: 597, type: 'movie' },
+                            { id: 51764, name: 'The Boys', tmdb_id: 76479, type: 'series' },
+                            { id: 124008, name: 'Stranger Things', tmdb_id: 66732, type: 'series' }
+                        ],
                     }),
                 };
             }
@@ -139,6 +166,28 @@ function makeSandbox(options = {}) {
                                 language: 'MULTI',
                                 quality: '1080p',
                                 m3u8: 'https://example.com/boys-s1e1.m3u8',
+                            }
+                        ]
+                    }),
+                };
+            }
+
+            if (url.startsWith('https://api.movix.blog/api/series/download/124008/season/1/episode/1')) {
+                return {
+                    json: async () => ({
+                        sources: []
+                    }),
+                };
+            }
+
+            if (url.startsWith('https://api.movix.blog/api/purstream/tv/66732/stream?season=1&episode=1')) {
+                return {
+                    json: async () => ({
+                        sources: [
+                            {
+                                url: 'https://example.com/stranger-things-s1e1.m3u8',
+                                name: 'pulse | 720p | VF',
+                                format: 'm3u8',
                             }
                         ]
                     }),
@@ -243,6 +292,20 @@ async function testExtractEpisodesTvWithoutTypeHint() {
     assert.strictEqual(episodes[0].href, 'media://stream/tv/76479/season/1/episode/1');
 }
 
+async function testExtractEpisodesMovieStillReturnsSingleEntry() {
+    const { sandbox } = makeSandbox();
+    const episodes = JSON.parse(await sandbox.extractEpisodes('media://stream/movie/597'));
+    assert.ok(Array.isArray(episodes), 'movie extractEpisodes should return an array');
+    assert.strictEqual(episodes.length, 1);
+    assert.strictEqual(episodes[0].href, 'media://stream/movie/597');
+}
+
+async function testExtractStreamUrlTvPurstreamFallbackWhenSeriesDownloadIsEmpty() {
+    const { sandbox } = makeSandbox();
+    const streamUrl = await sandbox.extractStreamUrl('media://stream/tv/66732/season/1/episode/1');
+    assert.strictEqual(streamUrl, 'https://example.com/stranger-things-s1e1.m3u8');
+}
+
 async function testSearchResults() {
     const { sandbox } = makeSandbox();
     const results = JSON.parse(await sandbox.searchResults('Titanic'));
@@ -259,8 +322,10 @@ async function run() {
     await testExtractStreamUrlFromHtml();
     await testExtractStreamUrlTv();
     await testExtractStreamUrlTvPurstreamFallbackWithoutSearchMatch();
+    await testExtractStreamUrlTvPurstreamFallbackWhenSeriesDownloadIsEmpty();
     await testExtractEpisodesTv();
     await testExtractEpisodesTvWithoutTypeHint();
+    await testExtractEpisodesMovieStillReturnsSingleEntry();
     await testSearchResults();
     console.log('All venom-stream tests passed.');
 }
